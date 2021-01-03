@@ -1,0 +1,10 @@
+AppleCoreCompiler/AST/Node$Expression.class
+AppleCoreCompiler/AST/Node$IntegerConstant.class
+AppleCoreCompiler/AST/Node$NumericConstant.class
+AppleCoreCompiler/AST/Node.class
+AppleCoreCompiler/AST/NodeVisitor.class
+AppleCoreCompiler/CodeGen/NativeCodeEmitter.class
+AppleCoreCompiler/CodeGen/SCMacroEmitter$ExpressionEmitter.class
+AppleCoreCompiler/CodeGen/SCMacroEmitter.class
+AppleCoreCompiler/Errors/ACCError.class
+AppleCoreCompiler/Errors/SyntaxError.class

@@ -1,0 +1,7 @@
+Processing /Users/liranxiao/jreduce-extra/cfr/input.jar (use silent to silence)
+Processing AppleCoreCompiler.AST.Node
+Processing AppleCoreCompiler.AST.NodeVisitor
+Processing AppleCoreCompiler.CodeGen.NativeCodeEmitter
+Processing AppleCoreCompiler.CodeGen.SCMacroEmitter
+Processing AppleCoreCompiler.Errors.ACCError
+Processing AppleCoreCompiler.Errors.SyntaxError
