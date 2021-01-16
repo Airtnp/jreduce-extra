@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class WorkingEnv {
+    public final boolean hierarchyReduce = false;
     public final boolean isReplaceAll = true;
     public final String name;
     public final String decompiler;
@@ -50,7 +51,7 @@ public class WorkingEnv {
                 + "/"
                 + decompiler
                 + "/items+logic/workfolder/final/sandbox/" + decompiler + "/src";
-        final String origPredicatePath = "/Users/liranxiao/garbage/temp/predicate.sh";
+        final String origPredicatePath = "/Users/liranxiao/garbage/temp/predicate_" + decompiler + ".sh";
         final String origCompilePath = "/Users/liranxiao/garbage/temp/compile.sh";
 
         final String tmpPath = "/Users/liranxiao/garbage/tmp/";
@@ -66,7 +67,7 @@ public class WorkingEnv {
 
         final Set<PosixFilePermission> perms = Files.getPosixFilePermissions(Paths.get(origCompilePath));
 
-        final String predicatePath = "/Users/liranxiao/garbage/tmp/predicate.sh";
+        final String predicatePath = "/Users/liranxiao/garbage/tmp/predicate_" + decompiler + ".sh";
         FileUtils.copyFile(new File(origPredicatePath), new File(predicatePath));
         Files.setPosixFilePermissions(Paths.get(predicatePath), perms);
 
@@ -104,7 +105,7 @@ public class WorkingEnv {
         final String libPath = "/Users/liranxiao/garbage/tmp/lib/";
         final String expectationPath = "/Users/liranxiao/garbage/tmp/expectation";
         final String compilePath = "/Users/liranxiao/garbage/tmp/compile.sh";
-        final String predicatePath = "/Users/liranxiao/garbage/tmp/predicate.sh";
+        final String predicatePath = "/Users/liranxiao/garbage/tmp/predicate_" + decompiler + ".sh";
         final String outputPath = "/Users/liranxiao/garbage/tmp/reduced/";
 
         final Hierarchy hierarchy = new Hierarchy();
@@ -130,7 +131,7 @@ public class WorkingEnv {
         final String libPath = "/Users/liranxiao/garbage/tmp/lib/";
         final String expectationPath = "/Users/liranxiao/garbage/tmp/expectation";
         final String compilePath = "/Users/liranxiao/garbage/tmp/compile.sh";
-        final String predicatePath = "/Users/liranxiao/garbage/tmp/predicate.sh";
+        final String predicatePath = "/Users/liranxiao/garbage/tmp/predicate_" + decompiler + ".sh";
         final String outputPath = "/Users/liranxiao/garbage/tmp/reduced/";
 
         final Hierarchy hierarchy = new Hierarchy();
@@ -153,41 +154,54 @@ public class WorkingEnv {
                 libPath,
                 expectationPath);
 
-        final Pair<HashSet<List<List<CallSite>>>, Boolean> clsResult = runReductionClass(hierarchy, pool, predicate);
-        System.out.println("Class   Level => (" + clsResult.getRight() + ") "
-                + clsResult.getLeft().size() + "/" + hierarchy.poolCallSites.size());
+        if (hierarchyReduce) {
+            final Pair<HashSet<List<List<CallSite>>>, Boolean> clsResult = runReductionClass(hierarchy, pool, predicate);
+            System.out.println("Class   Level => (" + clsResult.getRight() + ") "
+                    + clsResult.getLeft().size() + "/" + hierarchy.poolCallSites.size());
 
-        final List<List<CallSite>> mthdCards = clsResult.getLeft().stream()
-                .flatMap(List::stream).collect(Collectors.toList());
+            final List<List<CallSite>> mthdCards = clsResult.getLeft().stream()
+                    .flatMap(List::stream).collect(Collectors.toList());
 
-        final Pair<HashSet<List<CallSite>>, Boolean> mthdResult = runReductionMethod(
-                mthdCards, hierarchy, pool, predicate);
-        System.out.println("Method  Level => (" + mthdResult.getRight() + ") "
-                + mthdResult.getLeft().size() + "/" + mthdCards.size());
+            final Pair<HashSet<List<CallSite>>, Boolean> mthdResult = runReductionMethod(
+                    mthdCards, hierarchy, pool, predicate);
+            System.out.println("Method  Level => (" + mthdResult.getRight() + ") "
+                    + mthdResult.getLeft().size() + "/" + mthdCards.size());
 
-        final List<CallSite> cards = mthdResult.getLeft().stream()
-                .flatMap(List::stream)
-                .sorted(Comparator.comparing((cs) -> cs.poolIndex))
-                .collect(Collectors.toList());
+            final List<CallSite> cards = mthdResult.getLeft().stream()
+                    .flatMap(List::stream)
+                    .sorted(Comparator.comparing((cs) -> cs.poolIndex))
+                    .collect(Collectors.toList());
 
-        final Pair<HashSet<CallSite>, Boolean> elemResult = runReductionElement(
-                cards, hierarchy, pool, predicate);
-        System.out.println("Element Level => (" + elemResult.getRight() + ") "
-                + elemResult.getLeft().size() + "/" + hierarchy.callSites.size());
+            final Pair<HashSet<CallSite>, Boolean> elemResult = runReductionElement(
+                    cards, hierarchy, pool, predicate);
+            System.out.println("Element Level => (" + elemResult.getRight() + ") "
+                    + elemResult.getLeft().size() + "/" + hierarchy.callSites.size());
 
-        if (!elemResult.getRight()) {
-            if (!mthdResult.getRight()) {
-                progressions = BinaryPolicy.BLOCK2_AGGREGATOR.apply(clsResult.getLeft());
-                pool.writeClasses(hierarchy, false, progressions);
-                return clsResult.getLeft().size() + "/" + hierarchy.callSites.size();
-            } else {
-                progressions = BinaryPolicy.BLOCK_AGGREGATOR.apply(mthdResult.getLeft());
-                pool.writeClasses(hierarchy, false, progressions);
-                return mthdResult.getLeft().size() + "/" + hierarchy.callSites.size();
+            if (!elemResult.getRight()) {
+                if (!mthdResult.getRight()) {
+                    progressions = BinaryPolicy.BLOCK2_AGGREGATOR.apply(clsResult.getLeft());
+                    pool.writeClasses(hierarchy, false, progressions);
+                    return clsResult.getLeft().size() + "/" + hierarchy.callSites.size();
+                } else {
+                    progressions = BinaryPolicy.BLOCK_AGGREGATOR.apply(mthdResult.getLeft());
+                    pool.writeClasses(hierarchy, false, progressions);
+                    return mthdResult.getLeft().size() + "/" + hierarchy.callSites.size();
+                }
             }
-        }
+            progressions = BinaryPolicy.DEFAULT_AGGREGATOR.apply(elemResult.getLeft());
+            return elemResult.getLeft().size() + "/" + hierarchy.callSites.size();
+        } else {
+            final List<CallSite> cards = hierarchy.callSites.stream()
+                    .sorted(Comparator.comparing((cs) -> cs.poolIndex))
+                    .collect(Collectors.toList());
 
-        return elemResult.getLeft().size() + "/" + hierarchy.callSites.size();
+            final Pair<HashSet<CallSite>, Boolean> elemResult = runReductionElement(
+                    cards, hierarchy, pool, predicate);
+            System.out.println("Element Level => (" + elemResult.getRight() + ") "
+                    + elemResult.getLeft().size() + "/" + hierarchy.callSites.size());
+            progressions = BinaryPolicy.DEFAULT_AGGREGATOR.apply(elemResult.getLeft());
+            return elemResult.getLeft().size() + "/" + hierarchy.callSites.size();
+        }
     }
 
     private Pair<HashSet<List<List<CallSite>>>, Boolean> runReductionClass(

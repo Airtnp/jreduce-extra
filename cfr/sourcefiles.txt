@@ -1,6 +1,0 @@
-AppleCoreCompiler/AST/Node.java
-AppleCoreCompiler/AST/NodeVisitor.java
-AppleCoreCompiler/CodeGen/NativeCodeEmitter.java
-AppleCoreCompiler/CodeGen/SCMacroEmitter.java
-AppleCoreCompiler/Errors/ACCError.java
-AppleCoreCompiler/Errors/SyntaxError.java

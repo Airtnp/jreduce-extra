@@ -4,6 +4,7 @@ import org.apache.commons.lang3.tuple.ImmutablePair;
 import reduction.WorkingEnv;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -13,7 +14,7 @@ import java.util.Objects;
 public class Main {
 
     public static void runAll() throws IOException {
-        final FileWriter fw = new FileWriter("valid_pairs_hierarchy_opt_log.csv", true);
+        final FileWriter fw = new FileWriter("logs/valid_pairs_func_opt_log.csv", true);
         final CSVPrinter printer = new CSVPrinter(fw, CSVFormat.EXCEL);
         printer.printRecord("name", "predicate", "strategy", "ratio", "asm", "status", "progression");
 
@@ -46,12 +47,13 @@ public class Main {
                                     name, decompiler, "items+logic+reduced",
                                     "", false, "asm-halt", "");
                         }
+                    } catch (final FileNotFoundException ex) {
+                        continue;
                     } catch (final Exception ex) {
                         printer.printRecord(
                                 name, decompiler, "items+logic+reduced",
                                 "", "", ex, "");
                     }
-                    printer.println();
                     fw.flush();
                 }
             }
@@ -61,7 +63,7 @@ public class Main {
     }
 
     public static void runWith(final List<ImmutablePair<String, String>> validR) throws IOException, InterruptedException {
-        final FileWriter f = new FileWriter("valid_pairs_individual_log.csv", true);
+        final FileWriter f = new FileWriter("logs/valid_pairs_individual_log.csv", true);
         final CSVPrinter printer = new CSVPrinter(f, CSVFormat.EXCEL);
         printer.printRecord("name", "predicate", "strategy", "ratio", "asm", "status", "progression");
 
@@ -88,8 +90,8 @@ public class Main {
                 printer.printRecord(
                         p.left, p.right, "items+logic+reduced",
                         "", "", ex, "");
+                throw ex;
             }
-            printer.println();
             f.flush();
         }
 
@@ -98,21 +100,7 @@ public class Main {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         final List<ImmutablePair<String, String>> validR = new ArrayList<>();
-        validR.add(ImmutablePair.of("url39d09048de_s_webber_projog", "cfr"));
-        validR.add(ImmutablePair.of("urlfe8943f2e7_Lucas_Vanryb_Cryptography", "cfr"));
-        validR.add(ImmutablePair.of("urle3c114971e_ShawnZhong_Java", "cfr"));
-        validR.add(ImmutablePair.of("urle018949e15_DzenanaMahmutspahic_SI2013Tim8", "cfr"));
-        validR.add(ImmutablePair.of("url2eda649f42_homar_javaConcurrency", "cfr"));
-        validR.add(ImmutablePair.of("url2c00a748f0_igorivb_crackcoding", "cfr"));
-        validR.add(ImmutablePair.of("url58bbde1a35_Chabloun_Carshare", "cfr"));
-        validR.add(ImmutablePair.of("urld875e3d91e_Azal_gameworks", "cfr"));
-        validR.add(ImmutablePair.of("urlfb1c607a9c_harshiet_RallyExport", "cfr"));
-        validR.add(ImmutablePair.of("url12e7b5bff2_sdft_se2", "cfr"));
-        validR.add(ImmutablePair.of("url6af43b24fd_psigen_robotutils", "cfr"));
-        validR.add(ImmutablePair.of("urlac116c385d_kshmir_pdc_2012", "cfr"));
-        validR.add(ImmutablePair.of("urlac116c385d_kshmir_pdc_2012", "cfr"));
-        validR.add(ImmutablePair.of("urlc56d828483_skorch37_Asteria", "cfr"));
-        validR.add(ImmutablePair.of("url29ff2e53f3_nicolas3470_Settlers_of_Catan_AI", "cfr"));
+        validR.add(ImmutablePair.of("urlbacca29020_odnoklassniki_one_nio", "cfr"));
         runWith(validR);
         // runAll();
     }

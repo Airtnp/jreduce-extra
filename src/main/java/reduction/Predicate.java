@@ -1,13 +1,16 @@
 package reduction;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.List;
+
+import com.github.difflib.DiffUtils;
+import com.github.difflib.patch.AbstractDelta;
+import com.github.difflib.patch.Patch;
 
 public class Predicate {
     public final Path workingFolder;
@@ -75,8 +78,26 @@ public class Predicate {
         final int exitValue = process.exitValue();
         process.destroy();
 
+        /*
+        final List<AbstractDelta<String>> deltas = DiffUtils.diff(
+                Arrays.asList(expectation.split("\n")),
+                Arrays.asList(accOutput.toString().split("\n"))).getDeltas();
+        final FileWriter f = new FileWriter("expectation_log.txt", true);
+        f.write("Differences: \n");
+        deltas.forEach((d) -> {
+                    try {
+                        f.write(d.toString() + '\n');
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+        f.flush();
+        f.close();
+         */
+
         // @DEBUG
         // System.out.println("Compile output: " + accOutput);
+        // System.out.println("Expected output: " + expectation);
         return (exitValue == 0) && (accOutput.toString().equals(expectation));
     }
 }
