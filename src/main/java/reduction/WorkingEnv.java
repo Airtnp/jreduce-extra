@@ -23,35 +23,38 @@ public class WorkingEnv {
     public final Path staticCompilePath;
     public final String srcFolder;
     public final String targetFolder;
+    public final int reduceOption;
 
     public boolean finalValid = false;
     public String finalProgressions;
 
-    public static boolean startFromTmp = false;
-    public static boolean doClassCollapse = false;
     public Path currentTargetPath;
 
     public final String decompiler;
 
+    public static int methodRemoval = 0;
+    public static int classCollapse = 1;
+
     public WorkingEnv(final Path workingFolder, final String srcFolder, final String targetFolder,
-                      final Path staticPredicatePath, final Path staticCompilePath, final String decompiler) {
+                      final Path staticPredicatePath, final Path staticCompilePath, final String decompiler, final int option) {
         this.workingFolder = workingFolder;
         this.srcFolder = srcFolder;
         this.targetFolder = targetFolder;
         this.staticPredicatePath = staticPredicatePath;
         this.staticCompilePath = staticCompilePath;
         this.decompiler = decompiler;
+        this.reduceOption = option;
     }
 
     public WorkingEnv(final String name, final String decompiler) {
         this(jreduceFolder(name, decompiler), "reduced", "reduced_extra",
-                staticPredicatePath(decompiler), staticCompilePath(), decompiler);
+                staticPredicatePath(decompiler), staticCompilePath(), decompiler, WorkingEnv.classCollapse);
     }
 
     public WorkingEnv(final String name, final String decompiler,
-                      final String srcFolder, final String targetFolder) {
+                      final String srcFolder, final String targetFolder, final int option) {
         this(jreduceFolder(name, decompiler), srcFolder, targetFolder,
-                staticPredicatePath(decompiler), staticCompilePath(), decompiler);
+                staticPredicatePath(decompiler), staticCompilePath(), decompiler, option);
     }
 
     public static Path jreduceFolder(final String name, final String decompiler) {
@@ -119,9 +122,6 @@ public class WorkingEnv {
     }
 
     public void removeOldArtifacts() throws IOException {
-        if (!startFromTmp) {
-            FileUtils.deleteDirectory(tmpPath().toFile());
-        }
         FileUtils.deleteDirectory(targetPath().toFile());
         FileUtils.deleteDirectory(workingFolder.resolve(decompiler).toFile());
     }
@@ -147,13 +147,7 @@ public class WorkingEnv {
         final Hierarchy hierarchy = new Hierarchy();
         final ClassAnalyzeOptions options = new ClassAnalyzeOptions();
         options.addMethodRemoval = false;
-        Path source;
-        if (!startFromTmp) {
-            source = srcPath();
-        } else {
-            source = tmpPath();
-        }
-        final ClassPool pool = new ClassPool(source, libPath(), targetPath());
+        final ClassPool pool = new ClassPool(srcPath(), libPath(), targetPath());
         currentTargetPath = targetPath();
 
         pool.readLibs(hierarchy);
@@ -171,36 +165,19 @@ public class WorkingEnv {
 
         Pair<Set<Integer>, Boolean> result1;
         Path target = targetPath();
-        if (doClassCollapse) {
-            target = tmpPath();
-        }
-        if (!startFromTmp) {
-            result1 = runReductionMethod(hierarchy, srcPath(), target);
-        } else {
-            result1 = doNotRunReduction();
-        }
-        final String p1 = result1.getLeft().size() + "/" + hierarchy.reductionPoints.size();
 
-        if (!result1.getRight()) {
-            finalProgressions = "(" + result1.getLeft() + " | " + "invalid" + ")";
+        if (this.reduceOption == WorkingEnv.methodRemoval) {
+            result = runReductionMethod(hierarchy, srcPath(), targetPath());
+        } else {
+            result = runReductionClass(hierarchy, srcPath(), targetPath());
+        }
+        final String pair = result.getLeft().size() + "/" + hierarchy.reductionPoints.size();
+
+        if (!result.getRight()) {
+            finalProgressions = result1.getLeft().toString();
             finalValid = false;
-            return "(" + p1 + ", " + "invalid)";
         }
-
-        hierarchy.clearReductionPoint();
-
-        Pair<Set<Integer>, Boolean> result2;
-        if (doClassCollapse) {
-            result2 = runReductionClass(hierarchy, tmpPath(), targetPath());
-        } else {
-            result2 = doNotRunReduction();
-        }
-        final String p2 = result2.getLeft().size() + "/" + hierarchy.reductionPoints.size();
-
-        finalProgressions = "(" + result1.getLeft() + " | " + result2.getLeft() + ")";
-        finalValid = result1.getRight() & result2.getRight();
-
-        return "(" + p1 + ", " + p2 + ")";
+        return pair;
     }
 
     private Pair<Set<Integer>, Boolean> runReductionMethod(
@@ -260,14 +237,6 @@ public class WorkingEnv {
         options.addParentCollapsing = true;
         final ClassPool pool = new ClassPool(source, libPath(), target);
         currentTargetPath = target;
-
-        if (startFromTmp) {
-            final ClassAnalyzeOptions optionRead = new ClassAnalyzeOptions();
-            optionRead.addMethodRemoval = false;
-            optionRead.addInitMethodRemoval = false;
-            pool.readClasses(hierarchy, optionRead);
-            hierarchy.addEdges();
-        }
 
         // read classes only
         pool.readClasses(hierarchy, options);

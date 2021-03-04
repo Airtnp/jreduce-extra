@@ -71,14 +71,15 @@ public class ClassAnalyzer extends ClassNode {
             this.hierarchy.addClass(cls);
         }
 
-        if (options.doReduction && options.addParentCollapsing) {
-            analyzeHierarchy();
-        }
-
         if (this.cv != null)
             accept(this.cv);
 
         methods.forEach((mn) -> ((MethodAnalyzer) mn).prepare());
+
+        if (options.doReduction && options.addParentCollapsing) {
+            analyzeHierarchy();
+        }
+
         this.rpSection.high = hierarchy.getCurrentIndex();
     }
 

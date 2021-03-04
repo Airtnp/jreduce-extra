@@ -1,6 +1,8 @@
 package jvm;
 
 import graph.Hierarchy;
+import helper.GlobalConfig;
+
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -123,12 +125,24 @@ public class ClassPool {
                 return false;
             }
 
-            if (isFinal) {
+            if (GlobalConfig.debugClassVerifier) {
                 final ClassReader newCr = new ClassReader(cw.toByteArray());
-                CheckClassAdapter.verify(newCr, false, new PrintWriter(System.out));
+                CheckClassAdapter.verify(newCr, true, new PrintWriter(System.out));
             }
 
             final byte[] outputBytes = cw.toByteArray();
+
+            if (GlobalConfig.debugClassLoader) {
+                final String className = key.replace('/', '.');
+                final VerfiyClassLoader loader = new VerfiyClassLoader(className, cw.toByteArray());
+                try {
+                    loader.loadClass(className);
+                } catch (final ClassFormatError cfe) {
+                    GlobalConfig.println("Invalid class bytecode: " + cfe);
+                    return false;
+                }
+            }
+
             try {
                 Files.write(output, outputBytes);
             } catch (IOException ioException) {

@@ -41,7 +41,7 @@ public class Main {
         @Override
         public Void call() {
             final WorkingEnv env = new WorkingEnv(name, decompiler,
-                    "reduced", "reduced_mthdrm");
+                    "reduced2", "reduced2_cls", WorkingEnv.classCollapse);
             try {
                 System.out.println(name + " - " + decompiler);
                 env.setTemp();
@@ -102,7 +102,7 @@ public class Main {
                     // final ReductionTask task = new ReductionTask(name, decompiler, lock, printer);
                     // tasks.add(task);
                     final WorkingEnv env = new WorkingEnv(name, decompiler,
-                            "reduced", "reduced_mthdrm");
+                        "reduced2", "reduced2_cls", WorkingEnv.classCollapse);
                     try {
                         System.out.println(name + " - " + decompiler);
                         env.setTemp();
@@ -145,7 +145,8 @@ public class Main {
         for (final ImmutablePair<String, String> p: validR) {
             System.out.println(p.left + " - " + p.right);
             try {
-                final WorkingEnv env = new WorkingEnv(p.left, p.right, "reduced", "reduced_extra_test");
+                final WorkingEnv env = new WorkingEnv(p.left, p.right, 
+                    "reduced2", "reduced2_cls", WorkingEnv.classCollapse);
                 env.setTemp();
                 env.removeOldArtifacts();
 
@@ -176,7 +177,8 @@ public class Main {
 
     public static void runWithSingle(final ImmutablePair<String, String> p, final Path path) throws IOException, InterruptedException {
         System.out.println(p.left + " - " + p.right + " - " + path);
-        final WorkingEnv env = new WorkingEnv(p.left, p.right, "reduced", "reduced_mthdrm");
+        final WorkingEnv env = new WorkingEnv(
+            p.left, p.right, "reduced2", "reduced2_cls", WorkingEnv.classCollapse);
         env.setTemp();
         env.removeOldArtifacts();
         // Test if the bug is ASM-preserving
