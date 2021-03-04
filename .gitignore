@@ -1,0 +1,6 @@
+target/
+graphs/
+.idea/
+**/.DS_Store
+logs/
+*.dot

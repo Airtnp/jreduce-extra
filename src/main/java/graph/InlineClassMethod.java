@@ -1,6 +1,6 @@
 package graph;
 
-import jvm.StubCallVisitor;
+import jvm.NopMethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.MethodNode;
@@ -26,15 +26,6 @@ public class InlineClassMethod extends ClassMethod {
     public final RetType returnType;
     public final List<Type> revArgTypes;
 
-    public InlineClassMethod(final String className, final String name, final String descriptor,
-                             final String signature, final RetType returnType, final Type[] argTypes,
-                             final int access) {
-        super(className, name, descriptor, signature, access);
-        this.returnType = returnType;
-        this.revArgTypes = Arrays.asList(argTypes);
-        Collections.reverse(this.revArgTypes);
-    }
-
     public InlineClassMethod(final String className, final MethodNode mn,
                              final RetType returnType, final Type[] argTypes) {
         super(className, mn);
@@ -43,7 +34,7 @@ public class InlineClassMethod extends ClassMethod {
         Collections.reverse(this.revArgTypes);
     }
 
-    public void generateInlineStub(final StubCallVisitor mv) {
+    public void generateInlineStub(final NopMethodVisitor mv) {
         // pop out arguments
         for (final Type ty: this.revArgTypes) {
             final int size = ty.getSize();

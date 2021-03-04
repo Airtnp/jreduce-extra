@@ -4,35 +4,35 @@ import graph.Hierarchy;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.util.CheckClassAdapter;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.SortedSet;
 
 import static org.objectweb.asm.Opcodes.ASM9;
 
 public class ClassPool {
-    final String inputPath;
-    final String libPath;
-    final String outputPath;
-    final boolean isReplaceAll;
+    final Path inputPath;
+    final Path libPath;
+    final Path outputPath;
+    final HashMap<Path, ClassAnalyzer> caPool;
     final HashMap<Path, ClassReader> clsPool;
 
-    public ClassPool(final String inputPath, final String libPath, final String outputPath, final boolean isReplaceAll) {
+    public ClassPool(final Path inputPath, final Path libPath, final Path outputPath) {
         this.inputPath = inputPath;
         this.libPath = libPath;
         this.outputPath = outputPath;
-        this.isReplaceAll = isReplaceAll;
         this.clsPool = new HashMap<>();
+        this.caPool = new HashMap<>();
     }
 
     public void readLibs(final Hierarchy hierarchy) throws IOException {
-        Files.walk(Paths.get(libPath))
+        Files.walk(libPath)
                 .filter(Files::isRegularFile)
                 .filter((classfile) -> classfile.toString().endsWith(".class"))
                 .forEach((classfile) -> {
@@ -50,47 +50,83 @@ public class ClassPool {
                 });
     }
 
-    public void readClasses(final Hierarchy hierarchy) throws IOException {
-        Files.walk(Paths.get(inputPath))
+    public void readClassesSingle(final Path classPath, final Hierarchy hierarchy, final ClassAnalyzeOptions options) throws IOException {
+        Files.walk(inputPath)
                 .filter(Files::isRegularFile)
                 .filter((classfile) -> classfile.toString().endsWith(".class"))
                 .forEach((classfile) -> {
-                    final Path relPath = Paths.get(inputPath).relativize(classfile);
+                    final Path relPath = inputPath.relativize(classfile);
                     final byte[] bytes;
                     try {
                         bytes = Files.readAllBytes(classfile);
                         final ClassReader cr = new ClassReader(bytes);
-                        clsPool.put(relPath, cr);
-                        final ClassNode cn = new StubCollector(hierarchy, null);
+                        if (classPath.equals(relPath)) {
+                            options.doReduction = true;
+                        }
+                        final ClassAnalyzer cn = new ClassAnalyzer(hierarchy, options,null);
+                        // Ignore SourceFile, SourceDebugExtension, LocalVariableTable, LocalVariableTypeTable, LineNumberTable, MethodParameters
+                        // Don't need to skip stack map frame... ASM can adjust the offset automatically
+                        // unless adding jump instructions
                         cr.accept(cn, ClassReader.SKIP_DEBUG);
+                        options.doReduction = false;
+                        clsPool.put(relPath, cr);
+                        caPool.put(relPath, cn);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
                 });
     }
 
-    public void writeClasses(final Hierarchy hierarchy, final boolean isInitial, final HashSet<Integer> closure) {
-        clsPool.forEach((key, cr) -> {
-            final Path output = Paths.get(outputPath).resolve(key);
+    public void readClasses(final Hierarchy hierarchy, final ClassAnalyzeOptions options) throws IOException {
+        Files.walk(inputPath)
+                .filter(Files::isRegularFile)
+                .filter((classfile) -> classfile.toString().endsWith(".class"))
+                .forEach((classfile) -> {
+                    final Path relPath = inputPath.relativize(classfile);
+                    final byte[] bytes;
+                    try {
+                        bytes = Files.readAllBytes(classfile);
+                        final ClassReader cr = new ClassReader(bytes);
+                        final ClassAnalyzer cn = new ClassAnalyzer(hierarchy, options,null);
+                        // Ignore SourceFile, SourceDebugExtension, LocalVariableTable, LocalVariableTypeTable, LineNumberTable, MethodParameters
+                        // Don't need to skip stack map frame... ASM can adjust the offset automatically
+                        // unless adding jump instructions
+                        cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                        clsPool.put(relPath, cr);
+                        caPool.put(relPath, cn);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+    }
+
+    public boolean writeClasses(final Hierarchy hierarchy, final SortedSet<Integer> closure, final boolean isFinal) {
+        for (final Path key: clsPool.keySet()) {
+            final ClassReader cr = clsPool.get(key);
+            final ClassAnalyzer ca = caPool.get(key);
+            final Path output = outputPath.resolve(key);
             try {
                 Files.createDirectories(output.getParent());
             } catch (IOException e) {
                 e.printStackTrace();
             }
 
-            // Compute the stack map frames of methods from scratch
-            final ClassWriter cw = new HierarchyClassWriter(hierarchy, 0, libPath, inputPath);
-            final ClassVisitor cv = new ClassVisitor(ASM9, cw) {
-                @Override
-                public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-                    final MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
-                    return new StubCallVisitor(ASM9, cr.getClassName(), isInitial, isReplaceAll, mv, hierarchy, closure);
-                }
-            };
+            final ClassNode reader = new ClassNode(ASM9);
+            cr.accept(reader, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
-            // Ignore SourceFile, SourceDebugExtension, LocalVariableTable, LocalVariableTypeTable, LineNumberTable, MethodParameters
-            // Don't need to skip stack map frame... ASM can adjust the offset automatically
-            cr.accept(cv, ClassReader.SKIP_DEBUG);
+            // Compute the stack map frames of methods from scratch
+            final ClassWriter cw = new HierarchyClassWriter(hierarchy, ClassWriter.COMPUTE_FRAMES, libPath, inputPath);
+
+            // If check fails, return
+            final boolean valid = ca.accept(cw, reader, closure);
+            if (!valid) {
+                return false;
+            }
+
+            if (isFinal) {
+                final ClassReader newCr = new ClassReader(cw.toByteArray());
+                CheckClassAdapter.verify(newCr, false, new PrintWriter(System.out));
+            }
 
             final byte[] outputBytes = cw.toByteArray();
             try {
@@ -98,25 +134,22 @@ public class ClassPool {
             } catch (IOException ioException) {
                 ioException.printStackTrace();
             }
-
-            hierarchy.visitEndClass(isInitial);
-        });
-        hierarchy.visitEndClassPool();
+        }
+        return true;
     }
 
     public void identityWriteClasses(final Hierarchy hierarchy) {
         clsPool.forEach((key, cr) -> {
-            final Path output = Paths.get(outputPath).resolve(key);
+            final Path output = outputPath.resolve(key);
             try {
                 Files.createDirectories(output.getParent());
             } catch (IOException e) {
                 e.printStackTrace();
             }
 
-            final ClassWriter cw = new HierarchyClassWriter(hierarchy, 0, libPath, inputPath);
-            // Ignore SourceFile, SourceDebugExtension, LocalVariableTable, LocalVariableTypeTable, LineNumberTable, MethodParameters
-            // Don't need to skip stack map frame... ASM can adjust the offset automatically
-            cr.accept(cw, ClassReader.SKIP_DEBUG);
+            final ClassWriter cw = new HierarchyClassWriter(hierarchy, ClassWriter.COMPUTE_MAXS, libPath, inputPath);
+            // Identity write
+            cr.accept(cw, 0);
 
             final byte[] outputBytes = cw.toByteArray();
             try {

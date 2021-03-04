@@ -18,7 +18,6 @@ public class RemoveDebugAttributeAdapter extends ClassVisitor {
 
     /*
     Remove EnclosingMethod attribute
-    FIXME: Can we remove EnclosingMethod attribute? ASM4 documentation says so
      */
     @Override
     public void visitOuterClass(String owner, String name, String desc) {

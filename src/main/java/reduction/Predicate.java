@@ -7,27 +7,40 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Scanner;
 
 import com.github.difflib.DiffUtils;
 import com.github.difflib.patch.AbstractDelta;
-import com.github.difflib.patch.Patch;
+import helper.GlobalConfig;
 
 public class Predicate {
     public final Path workingFolder;
-    public final String predicatePath;
-    public final String compilePath;
-    public final String sourcePath;
-    public final String libPath;
-    public final String expectation;
+    public final Path predicatePath;
+    public final Path compilePath;
+    public final Path sourcePath;
+    public final Path libPath;
 
-    public Predicate(final String predicatePath, final String compilePath, final String sourcePath,
-                     final String libPath, final String expectationPath) throws IOException {
+    public final String decompiler;
+    public final String expectation;
+    public boolean saveDiff;
+
+    public Predicate(final Path workingFolder, final String decompiler,
+                     final Path predicatePath, final Path compilePath, final Path sourcePath,
+                     final Path libPath, final Path expectationPath,
+                     final boolean saveDiff) throws IOException {
         this.predicatePath = predicatePath;
         this.compilePath = compilePath;
         this.sourcePath = sourcePath;
         this.libPath = libPath;
-        this.expectation = new String(Files.readAllBytes(Paths.get(expectationPath)), StandardCharsets.UTF_8);;
-        this.workingFolder = Paths.get(compilePath).getParent();
+        this.expectation = new String(Files.readAllBytes(expectationPath), StandardCharsets.UTF_8);;
+        this.workingFolder = workingFolder;
+        this.saveDiff = saveDiff;
+        this.decompiler = decompiler;
+    }
+
+    public Predicate(final WorkingEnv env, final String decompiler, final boolean saveDiff) throws IOException {
+        this(env.workingFolder, decompiler, env.targetPredicatePath(), env.targetCompilePath(),
+                env.currentTargetPath(), env.libPath(), env.expectationPath(), saveDiff);
     }
 
     public boolean runPredicate() throws IOException, InterruptedException {
@@ -38,9 +51,12 @@ public class Predicate {
         final StringBuilder accOutput = new StringBuilder();
         String output;
 
-        final ProcessBuilder builder = new ProcessBuilder(predicatePath, sourcePath, libPath);
+        final ProcessBuilder builder = new ProcessBuilder(
+                predicatePath.toString(), sourcePath.toString(), libPath.toString());
         builder.redirectErrorStream(true);
         builder.directory(this.workingFolder.toFile());
+        if (GlobalConfig.debugCommand)
+            GlobalConfig.println(builder.command().toString());
         final Process process = builder.start();
         final BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()));
 
@@ -52,8 +68,6 @@ public class Predicate {
             return null;
         process.destroy();
 
-        // @DEBUG
-        // System.out.println("Decompile output: " + accOutput);
         return Paths.get(accOutput.toString()).getFileName().toString();
     }
 
@@ -62,9 +76,12 @@ public class Predicate {
         String output;
 
         // compile.sh requires `bash`
-        final ProcessBuilder builder = new ProcessBuilder("bash", compilePath, srcPath, libPath);
+        final ProcessBuilder builder = new ProcessBuilder(
+                "bash", compilePath.toString(), srcPath, libPath.toString());
         builder.directory(this.workingFolder.toFile());
         builder.redirectErrorStream(true);
+        if (GlobalConfig.debugCommand)
+            GlobalConfig.println(builder.command().toString());
         final Process process = builder.start();
         final BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()));
 
@@ -78,26 +95,31 @@ public class Predicate {
         final int exitValue = process.exitValue();
         process.destroy();
 
-        /*
-        final List<AbstractDelta<String>> deltas = DiffUtils.diff(
-                Arrays.asList(expectation.split("\n")),
-                Arrays.asList(accOutput.toString().split("\n"))).getDeltas();
-        final FileWriter f = new FileWriter("expectation_log.txt", true);
-        f.write("Differences: \n");
-        deltas.forEach((d) -> {
+        if (saveDiff) {
+            final List<AbstractDelta<String>> deltas = DiffUtils.diff(
+                    Arrays.asList(expectation.split("\n")),
+                    Arrays.asList(accOutput.toString().split("\n"))).getDeltas();
+            final FileWriter f = new FileWriter("logs/expectation_diff.txt", true);
+            if (!deltas.isEmpty()) {
+                f.write("Differences: \n");
+                deltas.forEach((d) -> {
                     try {
-                        f.write(d.toString() + '\n');
+                        f.write("\t" + d.toString() + '\n');
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
                 });
-        f.flush();
-        f.close();
-         */
+                // final Path compilerOutput = workingFolder.resolve(decompiler).resolve("compiler.out.txt");
+                // final Scanner s = new Scanner(compilerOutput.toFile());
+                // while (s.hasNextLine()) { f.write("\t" + s.nextLine() + "\n"); }
+                f.flush();
+            }
+            f.close();
+        }
 
-        // @DEBUG
-        // System.out.println("Compile output: " + accOutput);
-        // System.out.println("Expected output: " + expectation);
+        if (GlobalConfig.debugPredicate) {
+            GlobalConfig.println("Compile output: " + accOutput);
+        }
         return (exitValue == 0) && (accOutput.toString().equals(expectation));
     }
 }

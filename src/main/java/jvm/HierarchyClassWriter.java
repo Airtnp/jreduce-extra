@@ -4,21 +4,20 @@ import graph.ClassVertex;
 import graph.Hierarchy;
 import org.jgrapht.alg.lca.NaiveLCAFinder;
 import org.jgrapht.graph.DefaultEdge;
-import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 
-import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
 
 public class HierarchyClassWriter extends ClassWriter {
-    public final String libPath;
-    public final String bytePath;
+    public final Path libPath;
+    public final Path bytePath;
     public final Hierarchy hierarchy;
 
     public HierarchyClassWriter(final Hierarchy hierarchy, final int flags,
-                                final String libPath, final String bytePath) {
+                                final Path libPath, final Path bytePath) {
         super(flags);
         this.hierarchy = hierarchy;
         this.libPath = libPath;
@@ -30,7 +29,7 @@ public class HierarchyClassWriter extends ClassWriter {
         final ClassLoader classLoader = super.getClassLoader();
         try {
             return new URLClassLoader(
-                    new URL[]{new File(libPath).toURI().toURL(), new File(bytePath).toURI().toURL()}, classLoader);
+                    new URL[]{libPath.toUri().toURL(), bytePath.toUri().toURL()}, classLoader);
         } catch (MalformedURLException e) {
             return classLoader;
         }
