@@ -13,7 +13,10 @@ class VerfiyClassLoader extends ClassLoader {
     }
 
     @Override
-    public Class<?> loadClass(String _name) throws ClassNotFoundException {
+    public Class<?> loadClass(String name) throws ClassNotFoundException {
+        if (!className.equals(name)) {
+            return super.loadClass(name);
+        }
         return defineClass(className, bytecode, 0, bytecode.length);
     }
 }

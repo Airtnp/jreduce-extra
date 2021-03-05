@@ -163,8 +163,7 @@ public class WorkingEnv {
     public String runReduction() throws IOException, InterruptedException {
         final Hierarchy hierarchy = new Hierarchy();
 
-        Pair<Set<Integer>, Boolean> result1;
-        Path target = targetPath();
+        Pair<Set<Integer>, Boolean> result;
 
         if (this.reduceOption == WorkingEnv.methodRemoval) {
             result = runReductionMethod(hierarchy, srcPath(), targetPath());
@@ -174,7 +173,7 @@ public class WorkingEnv {
         final String pair = result.getLeft().size() + "/" + hierarchy.reductionPoints.size();
 
         if (!result.getRight()) {
-            finalProgressions = result1.getLeft().toString();
+            finalProgressions = result.getLeft().toString();
             finalValid = false;
         }
         return pair;
@@ -231,10 +230,12 @@ public class WorkingEnv {
             final Hierarchy hierarchy, final Path source, final Path target)
             throws IOException, InterruptedException {
         final ClassAnalyzeOptions options = new ClassAnalyzeOptions();
-        options.addHierarchy = false;
         options.addMethodRemoval = false;
         options.addInitMethodRemoval = false;
+        options.doMethodWithTryCatch = false;
+
         options.addParentCollapsing = true;
+        options.addParamSubtyping = true;
         final ClassPool pool = new ClassPool(source, libPath(), target);
         currentTargetPath = target;
 

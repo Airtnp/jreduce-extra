@@ -6,6 +6,9 @@ import asm.tree.analysis.SourceInterpreter;
 import asm.tree.analysis.Analyzer;
 import helper.ASMUtils;
 import helper.GlobalConfig;
+import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.analysis.SourceValue;
+
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jgrapht.graph.DefaultDirectedGraph;
@@ -44,6 +47,8 @@ public class MethodAnalyzer extends MethodNode {
     public final List<RPGroup> rpGroups;
     public final Map<Integer, AbstractInsnNode> rpPoints;
     public final Map<AbstractInsnNode, Integer> rpReversePoints;
+
+    public Set<String> classTypeConstraint;
 
     public static class Attribute {
         public final boolean isStub;
@@ -123,18 +128,19 @@ public class MethodAnalyzer extends MethodNode {
     }
 
     public void analyzeParameter() {
+        final boolean isStatic = (this.access & Opcodes.ACC_STATIC) != 0;
         final boolean isGeneric = methodNode.signature != null;
         // Parse signature for potential reduced arguments
         final String signature = isGeneric ? methodNode.signature : methodNode.desc;
         final MethodTypeSignature sig = SignatureParser.make().parseMethodSig(signature);
         // XXX: Assume all type invariant here
-        // XXX: Therefore, only consider raw Object types with their parents
+        // Therefore, only consider raw Object types with their parents
         // ClassTypeSignature: Objects
         // TypeVariableSignature: Generic types
         // ArrayTypeSignature: Array types
         // BaseType: own signatures
         final List<Pair<Integer, String>> potentialArguments = new ArrayList<>();
-        int index = 0;
+        int index = (isStatic ? 0 : 1);
         for (final TypeSignature ty: sig.getParameterTypes()) {
             if (ty instanceof ClassTypeSignature) {
                 final ClassTypeSignature cty = (ClassTypeSignature)ty;
@@ -146,16 +152,125 @@ public class MethodAnalyzer extends MethodNode {
             index += 1;
         }
 
-        // XXX: thinking about how to use calledBases after successfully running
-        // Enhance: could use the result after removing methods
-        final Set<String> calledBases = new HashSet<>();
-        // Parse instructions for potential owner callings to avoid invalid reductions
-        for (final AbstractInsnNode insn: methodNode.instructions) {
-            if (insn.getType() == AbstractInsnNode.METHOD_INSN) {
-                final MethodInsnNode methodInsn = (MethodInsnNode) insn;
-                final String potentialBase = methodInsn.owner;
-                calledBases.add(potentialBase);
+        final int argRange = Type.getArgumentTypes(this.desc).length
+                + (isStatic ? 1 : 0);
+
+        final Map<Integer, Set<String>> argConstraints = new HashMap<>();
+        final Map<AbstractInsnNode, Set<Integer>> sourceArgs = new HashMap<>();
+
+        // only care about specific instruction affects Object types & this
+        // ALOAD
+        // PUTSTATIC/GETFIELD/PUTFIELD/INVOKE/CHECKCAST/INSTANCEOF
+        final SourceInterpreter interpreter = new SourceInterpreter(ASM9) {
+            @Override
+            public void copyDependency(AbstractInsnNode insn, SourceValue v1, SourceValue v2, SourceValue v3, SourceValue v4) {
+                // XXX: maybe I need a second-pass or fixed point for this dependency
+                List<SourceValue> values = Arrays.asList(v1, v2, v3, v4);
+                Set<Integer> dependency = new HashSet<>();
+                for (final SourceValue sv: values) {
+                    if (sv == null) {
+                        continue;
+                    }
+                    for (final AbstractInsnNode sinsn: sv.insns) {
+                        if (sourceArgs.containsKey(sinsn)) {
+                            dependency.addAll(sourceArgs.get(sinsn));
+                        }
+                    }
+                }
+                if (!dependency.isEmpty()) {
+                    sourceArgs.computeIfAbsent(insn, x -> new HashSet<>())
+                            .addAll(dependency);
+                }
             }
+
+            @Override
+            public SourceValue copyOperation(AbstractInsnNode insn, SourceValue value) {
+                if (insn.getOpcode() == Opcodes.ALOAD) {
+                    final int var = ((VarInsnNode) insn).var;
+                    if (var < argRange) {
+                        sourceArgs.computeIfAbsent(insn, x -> new HashSet<>()).add(var);
+                    }
+                }
+                return super.copyOperation(insn, value);
+            }
+
+            @Override
+            public SourceValue unaryOperation(AbstractInsnNode insn, SourceValue value) {
+                // PUTSTATIC/GETFIELD
+                if (insn.getOpcode() == Opcodes.PUTSTATIC || insn.getOpcode() == Opcodes.GETFIELD) {
+                    final FieldInsnNode fieldInsnNode = (FieldInsnNode) insn;
+                    for (final AbstractInsnNode src: value.insns) {
+                        if (sourceArgs.containsKey(src)) {
+                            for (final int k: sourceArgs.get(src)) {
+                                argConstraints.computeIfAbsent(k, x -> new HashSet<>())
+                                        .add(fieldInsnNode.owner);
+                            }
+                        }
+                    }
+                }
+                return super.unaryOperation(insn, value);
+            }
+
+            @Override
+            public SourceValue binaryOperation(AbstractInsnNode insn, SourceValue v1, SourceValue v2) {
+                // PUTFIELD
+                if (insn.getOpcode() == Opcodes.PUTSTATIC || insn.getOpcode() == Opcodes.GETFIELD) {
+                    final FieldInsnNode fieldInsnNode = (FieldInsnNode) insn;
+                    for (final AbstractInsnNode src: v1.insns) {
+                        if (sourceArgs.containsKey(src)) {
+                            for (final int k: sourceArgs.get(src)) {
+                                argConstraints.computeIfAbsent(k, x -> new HashSet<>())
+                                        .add(fieldInsnNode.owner);
+                            }
+                        }
+                    }
+                }
+                return super.binaryOperation(insn, v1, v2);
+            }
+
+            @Override
+            public SourceValue naryOperation(AbstractInsnNode insn, List<? extends SourceValue> values) {
+                // INVOKE
+                if (insn.getOpcode() != Opcodes.MULTIANEWARRAY) {
+                    final MethodInsnNode methodInsnNode = (MethodInsnNode) insn;
+                    final Type[] argTypes = Type.getArgumentTypes(methodInsnNode.desc);
+                    int offset = 0;
+                    if (insn.getOpcode() != Opcodes.INVOKESTATIC && insn.getOpcode() != Opcodes.INVOKEDYNAMIC) {
+                        offset = 1;
+                        for (final AbstractInsnNode src: values.get(0).insns) {
+                            if (sourceArgs.containsKey(src)) {
+                                for (final int k: sourceArgs.get(src)) {
+                                    argConstraints.computeIfAbsent(k, x -> new HashSet<>())
+                                            .add(methodInsnNode.owner);
+                                }
+                            }
+                        }
+                    }
+                    for (int idx = offset; idx < values.size(); idx += 1) {
+                        final SourceValue sv = values.get(idx);
+                        if (sv == null) {
+                            continue;
+                        }
+                        for (final AbstractInsnNode src: sv.insns) {
+                            if (sourceArgs.containsKey(src)) {
+                                for (final int k: sourceArgs.get(src)) {
+                                    argConstraints.computeIfAbsent(k, x -> new HashSet<>())
+                                            .add(argTypes[idx - offset].getInternalName());
+                                }
+                            }
+                        }
+                    }
+                }
+                return super.naryOperation(insn, values);
+            }
+        };
+
+        // start analyzing
+        final Analyzer<SourceValue> analyzer = new Analyzer<>(interpreter);
+        try {
+            analyzer.analyze(className, methodNode);
+        } catch (AnalyzerException ex) {
+            GlobalConfig.println("MethodAnalyzer error: " + ex);
         }
 
         for (final Pair<Integer, String> potentialArgument : potentialArguments) {
@@ -165,8 +280,22 @@ public class MethodAnalyzer extends MethodNode {
             if (paramType.equals("java.lang.Object")) {
                 continue;
             }
+            List<String> parents = hierarchy.getParentClassReverse(paramType);
 
-            final List<String> parents = hierarchy.getParentClassReverse(paramType);
+            if (argConstraints.containsKey(paramIndex)) {
+                final Set<String> constraints = argConstraints.get(paramIndex);
+                // if requires current type
+                if (constraints.contains(paramType)) {
+                    continue;
+                }
+                for (int i = parents.size() - 1; i >= 0; i--) {
+                    if (constraints.contains(parents.get(i))) {
+                        parents = parents.subList(i, parents.size());
+                        break;
+                    }
+                }
+            }
+
             final int low = hierarchy.getCurrentIndex();
             // the reduction group will be: base, derived1, derive2, currentCls...
             // non-exist `=>` Object
@@ -182,6 +311,10 @@ public class MethodAnalyzer extends MethodNode {
 
             final int high = hierarchy.getCurrentIndex();
             rpGroups.add(new RPGroup(low, high, paramIndex));
+        }
+
+        if (!isStatic) {
+            this.classTypeConstraint = argConstraints.getOrDefault(0, new HashSet<>());
         }
     }
 
