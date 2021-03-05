@@ -15,10 +15,7 @@ import reduction.ClassSubTypingRP;
 import reduction.ParamSubTypingRP;
 import reduction.RPGroup;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.SortedSet;
+import java.util.*;
 
 import static org.objectweb.asm.Opcodes.ASM9;
 
@@ -84,14 +81,35 @@ public class ClassAnalyzer extends ClassNode {
     }
 
     public void analyzeHierarchy() {
-        // FIXME: do only if all putfield/<init>/getfield access non-parent types
-        // check Logic.hs#846, typecheck.hs
+        // XXX: requires to replace superclass call to Object.<init>
         // Ignore raw type & generic type
         if (superName.equals("java/lang/Object") || signature != null) {
             this.parentRpGroup.attribute = -1;
             return;
         }
-        final List<String> parents = hierarchy.getParentClassReverse(superName);
+        List<String> parents = hierarchy.getParentClassReverse(superName);
+
+        final Set<String> hierarchyConstraint = new HashSet<>();
+        for (final MethodNode m: methods) {
+            final Set<String> constraint = ((MethodAnalyzer) m).classTypeConstraint;
+            if (constraint != null) {
+                hierarchyConstraint.addAll(hierarchyConstraint);
+            }
+        }
+
+        // can't reduce superclass
+        if (hierarchyConstraint.contains(superName)) {
+            this.parentRpGroup.attribute = -1;
+            return;
+        }
+
+        for (int i = parents.size() - 1; i >= 0; i--) {
+            if (hierarchyConstraint.contains(parents.get(i))) {
+                parents = parents.subList(i, parents.size());
+                break;
+            }
+        }
+
         final int low = hierarchy.getCurrentIndex();
         // the reduction group will be: base, derived1, derive2, currentCls...
         // non-exist `=>` Object

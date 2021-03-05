@@ -77,6 +77,7 @@ public class Hierarchy {
         reversedGraph = new EdgeReversedGraph<>(graph);
     }
 
+    // return reversed parents, don't contain the requested type
     public List<String> getParentClassReverse(final String className) {
         if (cacheParents.containsKey(className)) {
             return cacheParents.get(className);
