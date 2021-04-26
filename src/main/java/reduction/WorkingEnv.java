@@ -171,9 +171,10 @@ public class WorkingEnv {
             result = runReductionClass(hierarchy, srcPath(), targetPath());
         }
         final String pair = result.getLeft().size() + "/" + hierarchy.reductionPoints.size();
+        finalProgressions = result.getLeft().toString();
+        finalValid = true;
 
         if (!result.getRight()) {
-            finalProgressions = result.getLeft().toString();
             finalValid = false;
         }
         return pair;
@@ -229,17 +230,30 @@ public class WorkingEnv {
     private Pair<Set<Integer>, Boolean> runReductionClass(
             final Hierarchy hierarchy, final Path source, final Path target)
             throws IOException, InterruptedException {
+
+        final ClassAnalyzeOptions startOption = new ClassAnalyzeOptions();
+        final ClassPool pool = new ClassPool(source, libPath(), target);
+        currentTargetPath = target;
+
+        startOption.doReduction = false;
+        startOption.checkClassAdapter = false;
+        startOption.addMethodRemoval = false;
+        pool.readLibs(hierarchy);
+        pool.readClasses(hierarchy, startOption);
+        hierarchy.addEdges();
+
         final ClassAnalyzeOptions options = new ClassAnalyzeOptions();
+        options.addHierarchy = false;
         options.addMethodRemoval = false;
         options.addInitMethodRemoval = false;
         options.doMethodWithTryCatch = false;
 
-        options.addParentCollapsing = true;
+        // FIXME: this is broken since we need all constraints from all methods
+        // options.addParentCollapsing = true;
         options.addParamSubtyping = true;
-        final ClassPool pool = new ClassPool(source, libPath(), target);
         currentTargetPath = target;
 
-        // read classes only
+        // read classes again
         pool.readClasses(hierarchy, options);
 
         final Predicate predicate = new Predicate(this, decompiler, false);

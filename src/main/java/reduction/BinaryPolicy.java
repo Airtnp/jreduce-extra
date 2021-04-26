@@ -114,7 +114,9 @@ public class BinaryPolicy<T extends Comparable<? super T>> {
     public boolean runPredicate(final SortedSet<T> currentClosure,
                                 final ClassPool classPool,
                                 final Predicate predicate) throws IOException, InterruptedException {
+        classPool.computeClasses(aggregator.apply(currentClosure));
         final boolean valid = classPool.writeClasses(this.hierarchy, aggregator.apply(currentClosure), false);
+        hierarchy.clearComputedDesc();
         if (!valid) {
             return false;
         }
@@ -128,7 +130,9 @@ public class BinaryPolicy<T extends Comparable<? super T>> {
     }
 
     public boolean runFinal(final ClassPool classPool, final Predicate predicate) throws IOException, InterruptedException {
+        classPool.computeClasses(aggregator.apply(progressions));
         final boolean valid = classPool.writeClasses(this.hierarchy, aggregator.apply(progressions), false);
+        hierarchy.clearComputedDesc();
         if (!valid) {
             return false;
         }

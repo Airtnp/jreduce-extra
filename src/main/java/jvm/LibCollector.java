@@ -23,7 +23,7 @@ public class LibCollector extends ClassNode {
     public void visitEnd() {
         final ClassVertex cls = new ClassVertex(this.name, this.access,
                 this.superName, new HashSet<>(this.interfaces));
-        this.hierarchy.addClass(cls);
+        this.hierarchy.addClass(cls, false);
         if (this.cv != null)
             accept(this.cv);
     }

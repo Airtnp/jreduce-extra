@@ -65,7 +65,7 @@ public class ClassAnalyzer extends ClassNode {
         }
 
         if (options.addHierarchy) {
-            this.hierarchy.addClass(cls);
+            this.hierarchy.addClass(cls, true);
         }
 
         if (this.cv != null)
@@ -114,7 +114,7 @@ public class ClassAnalyzer extends ClassNode {
         // the reduction group will be: base, derived1, derive2, currentCls...
         // non-exist `=>` Object
         for (final String parent : parents) {
-            if (parent.equals("java.lang.Object")) {
+            if (parent.equals("java/lang/Object")) {
                 continue;
             }
             final int idx = hierarchy.nextIndex();
@@ -124,6 +124,14 @@ public class ClassAnalyzer extends ClassNode {
         final int high = hierarchy.getCurrentIndex();
         this.parentRpGroup.low = low;
         this.parentRpGroup.high = high;
+    }
+
+    public void compute_desc(final SortedSet<Integer> allRp) {
+        final SortedSet<Integer> rp = rpSection.inRange(allRp);
+        for (final MethodNode method : this.methods) {
+            final MethodAnalyzer methodAnalyzer = (MethodAnalyzer) method;
+            methodAnalyzer.compute_descriptor(methodAnalyzer.rpSection.inRange(rp));
+        }
     }
 
     public boolean accept(ClassVisitor classVisitor, final ClassNode reader, final SortedSet<Integer> allRp) {
@@ -138,7 +146,7 @@ public class ClassAnalyzer extends ClassNode {
         if (options.addParentCollapsing && parentRpGroup.attribute != -1) {
             final int rpt = parentRpGroup.maxInRange(rp);
             if (rpt == -1) {
-                superName = "java.lang.Object";
+                superName = "java/lang/Object";
             } else {
                 superName = ((ClassSubTypingRP)hierarchy.getReductionPoint(rpt)).parentType;
             }

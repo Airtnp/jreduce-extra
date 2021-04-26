@@ -15,6 +15,7 @@ import reduction.WorkingEnv;
 import java.io.*;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
@@ -85,7 +86,7 @@ public class Main {
     public static void runAll() throws IOException, InterruptedException {
         // final ExecutorService pool = Executors.newWorkStealingPool(1);
         // final ReentrantLock lock = new ReentrantLock();
-        final FileWriter fw = new FileWriter("logs/hierarchy_log.csv", true);
+        final FileWriter fw = new FileWriter("logs/hierarchy_log_ch.csv", true);
         final CSVPrinter printer = new CSVPrinter(fw, CSVFormat.EXCEL);
 
         printer.printRecord("name", "predicate", "strategy", "ratio", "asm", "status", "progression", "time");
@@ -102,7 +103,7 @@ public class Main {
                     // final ReductionTask task = new ReductionTask(name, decompiler, lock, printer);
                     // tasks.add(task);
                     final WorkingEnv env = new WorkingEnv(name, decompiler,
-                        "reduced2", "reduced2_cls", WorkingEnv.classCollapse);
+                        "reduced2_mthdrm", "reduced2_cls", WorkingEnv.classCollapse);
                     try {
                         System.out.println(name + " - " + decompiler);
                         env.setTemp();
@@ -146,7 +147,7 @@ public class Main {
             System.out.println(p.left + " - " + p.right);
             try {
                 final WorkingEnv env = new WorkingEnv(p.left, p.right, 
-                    "reduced2", "reduced2_cls", WorkingEnv.classCollapse);
+                    "reduced2_mthdrm", "reduced2_cls", WorkingEnv.classCollapse);
                 env.setTemp();
                 env.removeOldArtifacts();
 
@@ -154,19 +155,21 @@ public class Main {
                 final boolean isAsmPreserved = env.runIdentity();
                 // Do reduction only if ASM preserved
                 if (isAsmPreserved) {
+                    long startTime = System.currentTimeMillis();
                     final String ratio = env.runReduction();
+                    long endTime = System.currentTimeMillis();
                     printer.printRecord(
                             p.left, p.right, "items+logic+reduced",
-                            ratio, true, "success", env.finalProgressions);
+                            ratio, true, "success", env.finalProgressions, endTime - startTime);
                 } else {
                     printer.printRecord(
                             p.left, p.right, "items+logic+reduced",
-                            "", false, "asm-halt", "");
+                            "", false, "asm-halt", "", 0);
                 }
             } catch (final Exception ex) {
                 printer.printRecord(
                         p.left, p.right, "items+logic+reduced",
-                        "", "", ex, "");
+                        "", "", ex, "", 0);
                 throw ex;
             }
             f.flush();
@@ -216,12 +219,10 @@ public class Main {
 
     public static void main(String[] args) throws IOException, InterruptedException, AnalyzerException {
         // testDebug();
-        runAll();
-        // final List<ImmutablePair<String, String>> validR = new ArrayList<>();
-        // validR.add(ImmutablePair.of("urlbacca29020_odnoklassniki_one_nio", "procyon"));
-        // validR.add(ImmutablePair.of("urld9b34679c8_ishakir_Algorithms", "cfr"));
-        // validR.add(ImmutablePair.of("url0fb6923c07_rattias_mscviewer", "fernflower"));
-        // runWith(validR);
+        // runAll();
+        final List<ImmutablePair<String, String>> validR = new ArrayList<>();
+        validR.add(ImmutablePair.of("url0067cdd33d_goldolphin_Mi", "fernflower"));
+        runWith(validR);
         // runWithSingle(validR.get(0), Paths.get("misc", "io", "In.class"));
     }
 }

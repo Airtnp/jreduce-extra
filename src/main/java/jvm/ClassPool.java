@@ -102,6 +102,13 @@ public class ClassPool {
                 });
     }
 
+    public void computeClasses(final SortedSet<Integer> closure) {
+        for (final Path key: clsPool.keySet()) {
+            final ClassAnalyzer ca = caPool.get(key);
+            ca.compute_desc(closure);
+        }
+    }
+
     public boolean writeClasses(final Hierarchy hierarchy, final SortedSet<Integer> closure, final boolean isFinal) {
         for (final Path key: clsPool.keySet()) {
             final ClassReader cr = clsPool.get(key);
@@ -133,11 +140,11 @@ public class ClassPool {
             final byte[] outputBytes = cw.toByteArray();
 
             if (GlobalConfig.debugClassLoader) {
-                final String className = key.replace('/', '.');
+                final String className = key.toString().replace('/', '.');
                 final VerfiyClassLoader loader = new VerfiyClassLoader(className, cw.toByteArray());
                 try {
                     loader.loadClass(className);
-                } catch (final ClassFormatError cfe) {
+                } catch (final ClassFormatError | ClassNotFoundException cfe) {
                     GlobalConfig.println("Invalid class bytecode: " + cfe);
                     return false;
                 }

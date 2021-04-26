@@ -3,6 +3,7 @@ package graph;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import java.util.HashMap;
@@ -14,6 +15,7 @@ public class ClassVertex {
     public final boolean isAbstract;
     public final String superCls;
     public final HashSet<String> interfaces;
+    public final HashMap<String, String> fields;
     public final HashMap<ImmutablePair<String, String>, ClassMethod> methods;
     public final HashMap<ImmutablePair<String, String>, InlineClassMethod> stubMethods;
 
@@ -25,10 +27,15 @@ public class ClassVertex {
         this.interfaces = interfaces;
         this.methods = new HashMap<>();
         this.stubMethods = new HashMap<>();
+        this.fields = new HashMap<>();
     }
 
     public void addMethod(final MethodNode mn) {
         methods.put(ImmutablePair.of(mn.name, mn.desc), new ClassMethod(this.name, mn));
+    }
+
+    public void addField(final FieldNode fn) {
+        fields.put(fn.name, fn.desc);
     }
 
     public void addStubMethod(final MethodNode mn, final InlineClassMethod.RetType retType) {
