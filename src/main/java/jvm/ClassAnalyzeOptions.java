@@ -7,9 +7,10 @@ public class ClassAnalyzeOptions {
     public boolean checkClassAdapter = true;
 
     public boolean addMethodRemoval = true;
-    public boolean addInitMethodRemoval = true;
+    public boolean addInitMethodRemoval = false;
     public boolean doMethodWithTryCatch = true;
 
     public boolean addParamSubtyping = false;
+    // Not working now.
     public boolean addParentCollapsing = false;
 }

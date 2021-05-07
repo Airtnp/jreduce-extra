@@ -200,8 +200,6 @@ public class Main {
         Hierarchy hierarchy = new Hierarchy();
 
         ClassAnalyzeOptions options = new ClassAnalyzeOptions();
-        options.addParentCollapsing = true;
-        options.addMethodRemoval = false;
         CheckClassAdapter cca = new CheckClassAdapter(tcv, true);
 
         ClassAnalyzer ca = new ClassAnalyzer(hierarchy, options, null);
@@ -218,7 +216,7 @@ public class Main {
     }
 
     public static void main(String[] args) throws IOException, InterruptedException, AnalyzerException {
-        // testDebug();
+        testDebug();
         // runAll();
         final List<ImmutablePair<String, String>> validR = new ArrayList<>();
         validR.add(ImmutablePair.of("url0067cdd33d_goldolphin_Mi", "fernflower"));
