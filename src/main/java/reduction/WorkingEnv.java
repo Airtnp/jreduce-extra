@@ -66,11 +66,11 @@ public class WorkingEnv {
     }
 
     public static Path staticPredicatePath(final String decompiler) {
-        return Paths.get("/Users/liranxiao/garbage/temp/predicate_" + decompiler + ".sh");
+        return Paths.get("scripts/predicate_" + decompiler + ".sh");
     }
 
     public static Path staticCompilePath() {
-        return Paths.get("/Users/liranxiao/garbage/temp/compile.sh");
+        return Paths.get("scripts/compile.sh");
     }
 
     public Path libPath() {

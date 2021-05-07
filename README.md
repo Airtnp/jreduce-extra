@@ -24,6 +24,7 @@
 * For JReduce artifact
 * - check `main/java/reduction/WorkingEnv.java` for reading paths
 * - Call `runAll` or `runWith` in `main/java/Main.java`
+* - Run JReduce with copied `predicate.sh` and `compile.sh` (modify `run.sh` from JReduce)
 * Custom bytecode lib
 * - rewrite `WorkingEnv.java` with building `ClassPool`, `Predicate`
 
