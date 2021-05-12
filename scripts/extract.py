@@ -95,7 +95,7 @@ def run_all():
 
     output = open(output_csv_name, "a+")
     wr = csv.DictWriter(output, 
-        ["name", "predicate", "strategy", 
+        ["name", "JReducePredicate", "strategy",
             "bugs", "initial-scc", "scc", "initial-classes", "classes", 
             "initial-bytes", "bytes", 
             "iters", "searches", "setup-time", "time", 
@@ -124,7 +124,7 @@ def run_all():
                     result2 = read_benchmark(workfolder2)
 
                     result.update(
-                        predicate=d,
+                        JReducePredicate=d,
                         name=f,
                         strategy="items+logic",
                         exitcode=str(status),
@@ -132,7 +132,7 @@ def run_all():
                     )
 
                     result2.update(
-                        predicate=d,
+                        JReducePredicate=d,
                         name=f,
                         strategy=method_name,
                         exitcode=str(status),
@@ -143,7 +143,7 @@ def run_all():
                 except Exception as e:
                     wr.writerow({
                         "name": f,
-                        "predicate": d,
+                        "JReducePredicate": d,
                         "strategy": "items+logic",
                         "status": str(e)
                     })
@@ -156,7 +156,7 @@ def run_with(l: list):
     
     output = open(output_csv_indiv_name, "a+")
     wr = csv.DictWriter(output, 
-        ["name", "predicate", "strategy", 
+        ["name", "JReducePredicate", "strategy",
             "bugs", "initial-scc", "scc", "initial-classes", "classes", 
             "initial-bytes", "bytes", 
             "iters", "searches", "setup-time", "time", 
@@ -177,7 +177,7 @@ def run_with(l: list):
             result2 = read_benchmark(workfolder2)
 
             result.update(
-                predicate=d,
+                JReducePredicate=d,
                 name=f,
                 strategy="items+logic",
                 exitcode=str(status),
@@ -185,7 +185,7 @@ def run_with(l: list):
             )
 
             result2.update(
-                predicate=d,
+                JReducePredicate=d,
                 name=f,
                 strategy=method_name,
                 exitcode=str(status),
@@ -196,7 +196,7 @@ def run_with(l: list):
         except Exception as e:
             wr.writerow({
                 "name": f,
-                "predicate": d,
+                "JReducePredicate": d,
                 "strategy": "items+logic",
                 "status": str(e)
             })

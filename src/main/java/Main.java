@@ -2,22 +2,27 @@ import graph.Hierarchy;
 import helper.DebugClass;
 import jvm.ClassAnalyzeOptions;
 import jvm.ClassAnalyzer;
+import org.apache.commons.cli.*;
+import org.apache.commons.cli.GnuParser;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.analysis.AnalyzerException;
 import org.objectweb.asm.util.CheckClassAdapter;
 import org.objectweb.asm.util.TraceClassVisitor;
-import reduction.WorkingEnv;
+import reduction.GeneralWorkingEnv;
+import reduction.JReduceWorkingEnv;
+import soot.G;
 
 import java.io.*;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.locks.ReentrantLock;
@@ -41,8 +46,8 @@ public class Main {
 
         @Override
         public Void call() {
-            final WorkingEnv env = new WorkingEnv(name, decompiler,
-                    "reduced2", "reduced2_cls", WorkingEnv.classCollapse);
+            final JReduceWorkingEnv env = new JReduceWorkingEnv(name, decompiler,
+                    "reduced2", "reduced2_cls", JReduceWorkingEnv.classCollapse);
             try {
                 System.out.println(name + " - " + decompiler);
                 env.setTemp();
@@ -83,7 +88,7 @@ public class Main {
         }
     }
 
-    public static void runAll() throws IOException, InterruptedException {
+    public static void runJReduceAll() throws IOException, InterruptedException {
         // final ExecutorService pool = Executors.newWorkStealingPool(1);
         // final ReentrantLock lock = new ReentrantLock();
         final FileWriter fw = new FileWriter("logs/hierarchy_log_ch.csv", true);
@@ -102,8 +107,8 @@ public class Main {
                 for (final String decompiler: decompilers) {
                     // final ReductionTask task = new ReductionTask(name, decompiler, lock, printer);
                     // tasks.add(task);
-                    final WorkingEnv env = new WorkingEnv(name, decompiler,
-                        "reduced2_mthdrm", "reduced2_cls", WorkingEnv.classCollapse);
+                    final JReduceWorkingEnv env = new JReduceWorkingEnv(name, decompiler,
+                        "reduced2_mthdrm", "reduced2_cls", JReduceWorkingEnv.classCollapse);
                     try {
                         System.out.println(name + " - " + decompiler);
                         env.setTemp();
@@ -138,7 +143,7 @@ public class Main {
         fw.close();
     }
 
-    public static void runWith(final List<ImmutablePair<String, String>> validR) throws IOException, InterruptedException {
+    public static void runJReduceMulti(final List<ImmutablePair<String, String>> validR) throws IOException, InterruptedException {
         final FileWriter f = new FileWriter("logs/hierarchy_individual_log.csv", true);
         final CSVPrinter printer = new CSVPrinter(f, CSVFormat.EXCEL);
         printer.printRecord("name", "predicate", "strategy", "ratio", "asm", "status", "progression");
@@ -146,8 +151,8 @@ public class Main {
         for (final ImmutablePair<String, String> p: validR) {
             System.out.println(p.left + " - " + p.right);
             try {
-                final WorkingEnv env = new WorkingEnv(p.left, p.right, 
-                    "reduced2_mthdrm", "reduced2_cls", WorkingEnv.classCollapse);
+                final JReduceWorkingEnv env = new JReduceWorkingEnv(p.left, p.right,
+                    "reduced2_mthdrm", "reduced2_cls", JReduceWorkingEnv.classCollapse);
                 env.setTemp();
                 env.removeOldArtifacts();
 
@@ -178,10 +183,10 @@ public class Main {
         f.close();
     }
 
-    public static void runWithSingle(final ImmutablePair<String, String> p, final Path path) throws IOException, InterruptedException {
+    public static void runJReduceSingle(final ImmutablePair<String, String> p, final Path path) throws IOException, InterruptedException {
         System.out.println(p.left + " - " + p.right + " - " + path);
-        final WorkingEnv env = new WorkingEnv(
-            p.left, p.right, "reduced2", "reduced2_cls", WorkingEnv.classCollapse);
+        final JReduceWorkingEnv env = new JReduceWorkingEnv(
+            p.left, p.right, "reduced2", "reduced2_cls", JReduceWorkingEnv.classCollapse);
         env.setTemp();
         env.removeOldArtifacts();
         // Test if the bug is ASM-preserving
@@ -215,12 +220,46 @@ public class Main {
         // ca.accept(tcv);
     }
 
-    public static void main(String[] args) throws IOException, InterruptedException, AnalyzerException {
-        testDebug();
-        // runAll();
-        final List<ImmutablePair<String, String>> validR = new ArrayList<>();
-        validR.add(ImmutablePair.of("url0067cdd33d_goldolphin_Mi", "fernflower"));
-        runWith(validR);
-        // runWithSingle(validR.get(0), Paths.get("misc", "io", "In.class"));
+    public static void main(String[] args) throws IOException, InterruptedException {
+        final Options options = new Options();
+        options.addOption("w", "wf",true, "working folder");
+        options.addOption("t", "target",true, "target path");
+        options.addOption("l", "lib", true, "library path");
+        options.addOption("c", "class", true, "class path");
+        options.addOption("p", "predicate", true, "predicate path");
+        final CommandLineParser parser = new GnuParser();
+
+        try {
+            final CommandLine cmd = parser.parse(options, args);
+            if (!cmd.hasOption("l") || !cmd.hasOption("c")
+                    || !cmd.hasOption("p") || !cmd.hasOption("t")
+                    || !cmd.hasOption("w"))  {
+                System.out.println("Missing necessary command-line arguments");
+                final HelpFormatter formatter = new HelpFormatter();
+                formatter.printHelp("options", options);
+                return;
+            }
+            final Path libPath = Paths.get(cmd.getOptionValue("l"));
+            final Path classPath = Paths.get(cmd.getOptionValue("c"));
+            final Path predicatePath = Paths.get(cmd.getOptionValue("p"));
+            final Path targetPath = Paths.get(cmd.getOptionValue("t"));
+            final Path workingFolder = Paths.get(cmd.getOptionValue("w"));
+
+            final GeneralWorkingEnv env = new GeneralWorkingEnv(
+                    classPath, libPath, predicatePath, targetPath, workingFolder, GeneralWorkingEnv.methodRemoval);
+            final boolean isAsmPreserved = env.runIdentity();
+            if (!isAsmPreserved) {
+                System.out.println("Not ASM preserved");
+                return;
+            }
+            final Pair<Set<Integer>, Boolean> results = env.runReduction();
+            System.out.println(results);
+
+        } catch (ParseException e) {
+            System.out.println("Get exception: " + e);
+            System.out.println("Error parsing the command-line arguments");
+            final HelpFormatter formatter = new HelpFormatter();
+            formatter.printHelp("options", options);
+        }
     }
 }

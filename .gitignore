@@ -4,3 +4,4 @@ graphs/
 **/.DS_Store
 logs/
 *.dot
+!sample/target

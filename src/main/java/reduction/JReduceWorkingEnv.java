@@ -3,12 +3,10 @@ package reduction;
 import graph.Hierarchy;
 import helper.GlobalConfig;
 import jvm.ClassAnalyzeOptions;
-import jvm.ClassAnalyzer;
 import jvm.ClassPool;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
-import org.objectweb.asm.ClassReader;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -17,7 +15,7 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.*;
 
-public class WorkingEnv {
+public class JReduceWorkingEnv {
     public final Path workingFolder;
     public final Path staticPredicatePath;
     public final Path staticCompilePath;
@@ -35,8 +33,8 @@ public class WorkingEnv {
     public static int methodRemoval = 0;
     public static int classCollapse = 1;
 
-    public WorkingEnv(final Path workingFolder, final String srcFolder, final String targetFolder,
-                      final Path staticPredicatePath, final Path staticCompilePath, final String decompiler, final int option) {
+    public JReduceWorkingEnv(final Path workingFolder, final String srcFolder, final String targetFolder,
+                             final Path staticPredicatePath, final Path staticCompilePath, final String decompiler, final int option) {
         this.workingFolder = workingFolder;
         this.srcFolder = srcFolder;
         this.targetFolder = targetFolder;
@@ -46,13 +44,13 @@ public class WorkingEnv {
         this.reduceOption = option;
     }
 
-    public WorkingEnv(final String name, final String decompiler) {
+    public JReduceWorkingEnv(final String name, final String decompiler) {
         this(jreduceFolder(name, decompiler), "reduced", "reduced_extra",
-                staticPredicatePath(decompiler), staticCompilePath(), decompiler, WorkingEnv.classCollapse);
+                staticPredicatePath(decompiler), staticCompilePath(), decompiler, JReduceWorkingEnv.classCollapse);
     }
 
-    public WorkingEnv(final String name, final String decompiler,
-                      final String srcFolder, final String targetFolder, final int option) {
+    public JReduceWorkingEnv(final String name, final String decompiler,
+                             final String srcFolder, final String targetFolder, final int option) {
         this(jreduceFolder(name, decompiler), srcFolder, targetFolder,
                 staticPredicatePath(decompiler), staticCompilePath(), decompiler, option);
     }
@@ -138,8 +136,8 @@ public class WorkingEnv {
         for (int i = 0; i < hierarchy.reductionPoints.size(); ++i) {
             list.add(i);
         }
-        final Predicate predicate = new Predicate(this, decompiler, GlobalConfig.debugPredicateDiff);
-        final Pair<Set<Integer>, Boolean> result = runReductionElement(list, hierarchy, pool, predicate);
+        final JReducePredicate JReducePredicate = new JReducePredicate(this, decompiler, GlobalConfig.debugPredicateDiff);
+        final Pair<Set<Integer>, Boolean> result = runReductionElement(list, hierarchy, pool, JReducePredicate);
         System.out.println(result);
     }
 
@@ -155,9 +153,9 @@ public class WorkingEnv {
 
         pool.identityWriteClasses(hierarchy);
 
-        final Predicate predicate = new Predicate(this, decompiler, GlobalConfig.debugPredicateDiff);
+        final JReducePredicate JReducePredicate = new JReducePredicate(this, decompiler, GlobalConfig.debugPredicateDiff);
 
-        return predicate.runPredicate();
+        return JReducePredicate.runPredicate();
     }
 
     public String runReduction() throws IOException, InterruptedException {
@@ -165,7 +163,7 @@ public class WorkingEnv {
 
         Pair<Set<Integer>, Boolean> result;
 
-        if (this.reduceOption == WorkingEnv.methodRemoval) {
+        if (this.reduceOption == JReduceWorkingEnv.methodRemoval) {
             result = runReductionMethod(hierarchy, srcPath(), targetPath());
         } else {
             result = runReductionClass(hierarchy, srcPath(), targetPath());
@@ -194,14 +192,14 @@ public class WorkingEnv {
         // post-compute the edges
         hierarchy.addEdges();
 
-        final Predicate predicate = new Predicate(this, decompiler, GlobalConfig.debugPredicateDiff);
+        final JReducePredicate JReducePredicate = new JReducePredicate(this, decompiler, GlobalConfig.debugPredicateDiff);
 
         final List<Integer> list = new ArrayList<>();
         for (int i = 0; i < hierarchy.reductionPoints.size(); ++i) {
             list.add(i);
         }
 
-        return runReductionElement(list, hierarchy, pool, predicate);
+        return runReductionElement(list, hierarchy, pool, JReducePredicate);
     }
 
     private Pair<Set<Integer>, Boolean> runReductionParam(
@@ -217,14 +215,14 @@ public class WorkingEnv {
         // read classes only
         pool.readClasses(hierarchy, options);
 
-        final Predicate predicate = new Predicate(this, decompiler, GlobalConfig.debugPredicateDiff);
+        final JReducePredicate JReducePredicate = new JReducePredicate(this, decompiler, GlobalConfig.debugPredicateDiff);
 
         final List<Integer> list = new ArrayList<>();
         for (int i = 0; i < hierarchy.reductionPoints.size(); ++i) {
             list.add(i);
         }
 
-        return runReductionElement(list, hierarchy, pool, predicate);
+        return runReductionElement(list, hierarchy, pool, JReducePredicate);
     }
 
     private Pair<Set<Integer>, Boolean> runReductionClass(
@@ -256,26 +254,26 @@ public class WorkingEnv {
         // read classes again
         pool.readClasses(hierarchy, options);
 
-        final Predicate predicate = new Predicate(this, decompiler, false);
+        final JReducePredicate JReducePredicate = new JReducePredicate(this, decompiler, false);
 
         final List<Integer> list = new ArrayList<>();
         for (int i = 0; i < hierarchy.reductionPoints.size(); ++i) {
             list.add(i);
         }
 
-        return runReductionElement(list, hierarchy, pool, predicate);
+        return runReductionElement(list, hierarchy, pool, JReducePredicate);
     }
 
     private Pair<Set<Integer>, Boolean> runReductionElement(
             final List<Integer> elements,
             final Hierarchy hierarchy,
-            final ClassPool pool, final Predicate predicate)
+            final ClassPool pool, final JReducePredicate JReducePredicate)
             throws IOException, InterruptedException {
         final BinaryPolicy<Integer> policy = new BinaryPolicy<>(
                 hierarchy, elements, BinaryPolicy.ID_AGGREGATOR);
-        policy.runReduction(pool, predicate);
+        policy.runReduction(pool, JReducePredicate);
 
-        final boolean isValidFinal = policy.runFinal(pool, predicate);
+        final boolean isValidFinal = policy.runFinal(pool, JReducePredicate);
         if (GlobalConfig.debug) {
             GlobalConfig.println("Element Level => (" + isValidFinal + ") "
                     + policy.getProgressions().size() + "/" + hierarchy.reductionPoints.size());
