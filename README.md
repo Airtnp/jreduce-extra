@@ -39,6 +39,7 @@ mvn exec:java -Dexec.mainClass="Main" -Dexec.args="-w '$PATH_HERE/sample/target'
 * - Run JReduce with copied `JReducePredicate.sh` and `compile.sh` (modify `run.sh` from JReduce)
 * Custom bytecode lib
 * - rewrite `WorkingEnv.java` with building `ClassPool`, `Predicate`
+* - for non-decompiler cases, replace method call results with `null` or default values (stubbing) may provide a lot of invalid values: could use a reflection mechanism to create a valid value?
 
 
 
