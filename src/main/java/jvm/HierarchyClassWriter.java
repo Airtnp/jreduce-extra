@@ -10,14 +10,16 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 public class HierarchyClassWriter extends ClassWriter {
-    public final Path libPath;
-    public final Path bytePath;
+    public final List<Path> libPath;
+    public final List<Path> bytePath;
     public final Hierarchy hierarchy;
 
     public HierarchyClassWriter(final Hierarchy hierarchy, final int flags,
-                                final Path libPath, final Path bytePath) {
+                                final List<Path> libPath, final List<Path> bytePath) {
         super(flags);
         this.hierarchy = hierarchy;
         this.libPath = libPath;
@@ -28,8 +30,14 @@ public class HierarchyClassWriter extends ClassWriter {
     protected ClassLoader getClassLoader() {
         final ClassLoader classLoader = super.getClassLoader();
         try {
-            return new URLClassLoader(
-                    new URL[]{libPath.toUri().toURL(), bytePath.toUri().toURL()}, classLoader);
+            List<URL> urls = new ArrayList<>();
+            for (final Path libPath: this.libPath) {
+                urls.add(libPath.toUri().toURL());
+            }
+            for (final Path bytePath: this.bytePath) {
+                urls.add(bytePath.toUri().toURL());
+            }
+            return new URLClassLoader((URL[]) urls.toArray(), classLoader);
         } catch (MalformedURLException e) {
             return classLoader;
         }

@@ -20,12 +20,10 @@ import java.io.*;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 import static org.objectweb.asm.Opcodes.ASM9;
 
@@ -227,6 +225,7 @@ public class Main {
         options.addOption("l", "lib", true, "library path");
         options.addOption("c", "class", true, "class path");
         options.addOption("p", "predicate", true, "predicate path");
+        options.addOption("o", "omit", true, "omitted classes input path");
         final CommandLineParser parser = new GnuParser();
 
         try {
@@ -239,14 +238,32 @@ public class Main {
                 formatter.printHelp("options", options);
                 return;
             }
-            final Path libPath = Paths.get(cmd.getOptionValue("l"));
-            final Path classPath = Paths.get(cmd.getOptionValue("c"));
+            final List<Path> libPath = Arrays.stream(cmd.getOptionValue("l").split(";"))
+                    .map(Paths::get)
+                    .collect(Collectors.toList());
+            final List<Path> classPath = Arrays.stream(cmd.getOptionValue("c").split(";"))
+                    .map(Paths::get)
+                    .collect(Collectors.toList());;
             final Path predicatePath = Paths.get(cmd.getOptionValue("p"));
-            final Path targetPath = Paths.get(cmd.getOptionValue("t"));
+            final List<Path> targetPath = Arrays.stream(cmd.getOptionValue("t").split(";"))
+                    .map(Paths::get)
+                    .collect(Collectors.toList());
             final Path workingFolder = Paths.get(cmd.getOptionValue("w"));
 
+            final HashSet<String> omitClasses = new HashSet<>();
+            if (cmd.hasOption("o")) {
+                final Path omitTxtFile = Paths.get(cmd.getOptionValue("o"));
+                final BufferedReader reader = new BufferedReader(new FileReader(omitTxtFile.toFile()));
+                String line = reader.readLine();
+                while (line != null) {
+                    omitClasses.add(line);
+                    line = reader.readLine();
+                }
+                reader.close();
+            }
+
             final GeneralWorkingEnv env = new GeneralWorkingEnv(
-                    classPath, libPath, predicatePath, targetPath, workingFolder, GeneralWorkingEnv.methodRemoval);
+                    classPath, libPath, predicatePath, targetPath, workingFolder, omitClasses, GeneralWorkingEnv.methodRemoval);
             final boolean isAsmPreserved = env.runIdentity();
             if (!isAsmPreserved) {
                 System.out.println("Not ASM preserved");

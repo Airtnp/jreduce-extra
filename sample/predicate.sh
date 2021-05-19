@@ -1,3 +1,4 @@
+cd target;
 output="$(java Main)"
 
 if [[ $output =~ "expected output" ]]; then

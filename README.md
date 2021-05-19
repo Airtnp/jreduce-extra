@@ -9,8 +9,13 @@
 ```shell
 # if target is present
 rm -rf $PATH_HERE/sample/target
-mvn exec:java -Dexec.mainClass="Main" -Dexec.args="-w '$PATH_HERE/sample/target' -l '$PATH_HERE/sample/lib' -c '$PATH_HERE/sample/classes' -p '$PATH_HERE/sample/predicate.sh' -t '$PATH_HERE/sample/target'"
+mvn exec:java -Dexec.mainClass="Main" \
+  -Dexec.args="-w '$PATH_HERE/sample/target' -l '$PATH_HERE/sample/lib/' -c '$PATH_HERE/sample/classes' -p '$PATH_HERE/sample/predicate.sh' -t '$PATH_HERE/sample/target' -o '$PATH_HERE/sample/omit.txt'"
+# multiple input
+mvn exec:java -Dexec.mainClass="Main" \
+  -Dexec.args="-w '$PATH_HERE/sample/' -l '$PATH_HERE/sample/lib/' -c '$PATH_HERE/sample/classes;$PATH_HERE/sample/classes2.jar' -p '$PATH_HERE/sample/predicate.sh' -t '$PATH_HERE/sample/target;$PATH_HERE/sample/target2' -o '$PATH_HERE/sample/omit.txt'"
 ```    
+* - the number of input paths must match the number of output paths
 
 ## Configs
 

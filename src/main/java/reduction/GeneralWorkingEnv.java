@@ -10,26 +10,31 @@ import org.apache.commons.lang3.tuple.Pair;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 public class GeneralWorkingEnv {
-    final Path srcPath;
-    final Path targetPath;
-    final Path libPath;
+    final List<Path> srcPath;
+    final List<Path> targetPath;
+    final List<Path> libPath;
     final Path predicatePath;
     final Path workingFolder;
+    final Set<String> omittedClasses;
     final int option;
 
     public static int methodRemoval = 0;
     public static int classCollapse = 1;
 
-    public GeneralWorkingEnv(Path srcPath, Path libPath, Path predicatePath, Path targetPath, Path workingFolder, int option) {
+    public GeneralWorkingEnv(List<Path> srcPath, List<Path> libPath, Path predicatePath, List<Path> targetPath, Path workingFolder,
+                             Set<String> omittedClasses,
+                             int option) {
         this.srcPath = srcPath;
         this.targetPath = targetPath;
         this.libPath = libPath;
         this.predicatePath = predicatePath;
         this.workingFolder = workingFolder;
+        this.omittedClasses = omittedClasses;
         this.option = option;
     }
 
@@ -64,14 +69,14 @@ public class GeneralWorkingEnv {
     }
 
     private Pair<Set<Integer>, Boolean> runReductionMethod(
-            final Hierarchy hierarchy, final Path source, final Path target)
+            final Hierarchy hierarchy, final List<Path> source, final List<Path> target)
             throws IOException, InterruptedException {
         final ClassAnalyzeOptions options = new ClassAnalyzeOptions();
         final ClassPool pool = new ClassPool(source, libPath, target);
 
         // read lib & classes
         pool.readLibs(hierarchy);
-        pool.readClasses(hierarchy, options);
+        pool.readClasses(hierarchy, omittedClasses, options);
 
         // post-compute the edges
         hierarchy.addEdges();
@@ -87,7 +92,7 @@ public class GeneralWorkingEnv {
     }
 
     private Pair<Set<Integer>, Boolean> runReductionClass(
-            final Hierarchy hierarchy, final Path source, final Path target)
+            final Hierarchy hierarchy, final List<Path> source, final List<Path> target)
             throws IOException, InterruptedException {
 
         final ClassAnalyzeOptions startOption = new ClassAnalyzeOptions();
@@ -97,7 +102,7 @@ public class GeneralWorkingEnv {
         startOption.checkClassAdapter = false;
         startOption.addMethodRemoval = false;
         pool.readLibs(hierarchy);
-        pool.readClasses(hierarchy, startOption);
+        pool.readClasses(hierarchy, omittedClasses, startOption);
         hierarchy.addEdges();
 
         final ClassAnalyzeOptions options = new ClassAnalyzeOptions();

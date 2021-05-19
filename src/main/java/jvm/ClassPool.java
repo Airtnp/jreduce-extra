@@ -9,97 +9,189 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.util.CheckClassAdapter;
 
-import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.*;
+import java.lang.reflect.Array;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.SortedSet;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 import static org.objectweb.asm.Opcodes.ASM9;
 
 public class ClassPool {
-    final Path inputPath;
-    final Path libPath;
-    final Path outputPath;
+    final List<Path> inputPath;
+    final List<Path> libPath;
+    final List<Path> outputPath;
     final HashMap<Path, ClassAnalyzer> caPool;
     final HashMap<Path, ClassReader> clsPool;
+    final HashMap<ClassReader, Integer> outputCntPool;
 
     public ClassPool(final Path inputPath, final Path libPath, final Path outputPath) {
+        this.inputPath = new ArrayList<>();
+        this.inputPath.add(inputPath);
+        this.libPath = new ArrayList<>();
+        this.libPath.add(libPath);
+        this.outputPath = new ArrayList<>();
+        this.outputPath.add(outputPath);
+        this.clsPool = new HashMap<>();
+        this.caPool = new HashMap<>();
+        this.outputCntPool = new HashMap<>();
+    }
+
+    public ClassPool(final List<Path> inputPath, final List<Path> libPath, final List<Path> outputPath) {
         this.inputPath = inputPath;
         this.libPath = libPath;
         this.outputPath = outputPath;
         this.clsPool = new HashMap<>();
         this.caPool = new HashMap<>();
+        this.outputCntPool = new HashMap<>();
     }
 
     public void readLibs(final Hierarchy hierarchy) throws IOException {
-        Files.walk(libPath)
-                .filter(Files::isRegularFile)
-                .filter((classfile) -> classfile.toString().endsWith(".class"))
-                .forEach((classfile) -> {
-                    final byte[] bytes;
-                    try {
-                        bytes = Files.readAllBytes(classfile);
-                        if (bytes.length != 0) {
-                            final ClassReader cr = new ClassReader(bytes);
-                            final ClassNode cn = new LibCollector(hierarchy, null);
-                            cr.accept(cn, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
+        for (final Path libPath: this.libPath) {
+            Files.walk(libPath)
+                    .filter(Files::isRegularFile)
+                    .filter((classfile) -> classfile.toString().endsWith(".class"))
+                    .forEach((classfile) -> {
+                        final byte[] bytes;
+                        try {
+                            bytes = Files.readAllBytes(classfile);
+                            if (bytes.length != 0) {
+                                final ClassReader cr = new ClassReader(bytes);
+                                final ClassNode cn = new LibCollector(hierarchy, null);
+                                cr.accept(cn, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
+                            }
+                        } catch (IOException e) {
+                            e.printStackTrace();
                         }
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                });
+                    });
+        }
     }
 
     public void readClassesSingle(final Path classPath, final Hierarchy hierarchy, final ClassAnalyzeOptions options) throws IOException {
-        Files.walk(inputPath)
-                .filter(Files::isRegularFile)
-                .filter((classfile) -> classfile.toString().endsWith(".class"))
-                .forEach((classfile) -> {
-                    final Path relPath = inputPath.relativize(classfile);
-                    final byte[] bytes;
-                    try {
-                        bytes = Files.readAllBytes(classfile);
-                        final ClassReader cr = new ClassReader(bytes);
-                        if (classPath.equals(relPath)) {
-                            options.doReduction = true;
+        int cnt = 0;
+        for (final Path inputPath: this.inputPath) {
+            int finalCnt = cnt;
+            Files.walk(inputPath)
+                    .filter(Files::isRegularFile)
+                    .filter((classfile) -> classfile.toString().endsWith(".class"))
+                    .forEach((classfile) -> {
+                        final Path relPath = inputPath.relativize(classfile);
+                        final byte[] bytes;
+                        try {
+                            bytes = Files.readAllBytes(classfile);
+                            final ClassReader cr = new ClassReader(bytes);
+                            if (classPath.equals(relPath)) {
+                                options.doReduction = true;
+                            }
+                            final ClassAnalyzer cn = new ClassAnalyzer(hierarchy, options,null);
+                            // Ignore SourceFile, SourceDebugExtension, LocalVariableTable, LocalVariableTypeTable, LineNumberTable, MethodParameters
+                            // Don't need to skip stack map frame... ASM can adjust the offset automatically
+                            // unless adding jump instructions
+                            cr.accept(cn, ClassReader.SKIP_DEBUG);
+                            options.doReduction = false;
+                            clsPool.put(relPath, cr);
+                            caPool.put(relPath, cn);
+                            outputCntPool.put(cr, finalCnt);
+                        } catch (IOException e) {
+                            e.printStackTrace();
                         }
-                        final ClassAnalyzer cn = new ClassAnalyzer(hierarchy, options,null);
-                        // Ignore SourceFile, SourceDebugExtension, LocalVariableTable, LocalVariableTypeTable, LineNumberTable, MethodParameters
-                        // Don't need to skip stack map frame... ASM can adjust the offset automatically
-                        // unless adding jump instructions
-                        cr.accept(cn, ClassReader.SKIP_DEBUG);
-                        options.doReduction = false;
-                        clsPool.put(relPath, cr);
-                        caPool.put(relPath, cn);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                });
+                    });
+            cnt += 1;
+        }
     }
 
     public void readClasses(final Hierarchy hierarchy, final ClassAnalyzeOptions options) throws IOException {
-        Files.walk(inputPath)
-                .filter(Files::isRegularFile)
-                .filter((classfile) -> classfile.toString().endsWith(".class"))
-                .forEach((classfile) -> {
-                    final Path relPath = inputPath.relativize(classfile);
-                    final byte[] bytes;
-                    try {
-                        bytes = Files.readAllBytes(classfile);
-                        final ClassReader cr = new ClassReader(bytes);
-                        final ClassAnalyzer cn = new ClassAnalyzer(hierarchy, options,null);
-                        // Ignore SourceFile, SourceDebugExtension, LocalVariableTable, LocalVariableTypeTable, LineNumberTable, MethodParameters
-                        // Don't need to skip stack map frame... ASM can adjust the offset automatically
-                        // unless adding jump instructions
-                        cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-                        clsPool.put(relPath, cr);
-                        caPool.put(relPath, cn);
-                    } catch (IOException e) {
-                        e.printStackTrace();
+        int cnt = 0;
+        for (final Path inputPath: this.inputPath) {
+            int finalCnt = cnt;
+            Files.walk(inputPath)
+                    .filter(Files::isRegularFile)
+                    .filter((classfile) -> classfile.toString().endsWith(".class"))
+                    .forEach((classfile) -> {
+                        final Path relPath = inputPath.relativize(classfile);
+                        final byte[] bytes;
+                        try {
+                            bytes = Files.readAllBytes(classfile);
+                            final ClassReader cr = new ClassReader(bytes);
+                            final ClassAnalyzer cn = new ClassAnalyzer(hierarchy, options,null);
+                            // Ignore SourceFile, SourceDebugExtension, LocalVariableTable, LocalVariableTypeTable, LineNumberTable, MethodParameters
+                            // Don't need to skip stack map frame... ASM can adjust the offset automatically
+                            // unless adding jump instructions
+                            cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                            clsPool.put(relPath, cr);
+                            caPool.put(relPath, cn);
+                            outputCntPool.put(cr, finalCnt);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    });
+            cnt += 1;
+        }
+    }
+
+    public void readClasses(final Hierarchy hierarchy, final Set<String> omittedClasses, final ClassAnalyzeOptions options) throws IOException {
+        int cnt = 0;
+        for (Path inputPath: this.inputPath) {
+            if (inputPath.toString().toLowerCase().endsWith(".jar")) {
+                Path tmpFolder = Files.createTempDirectory("jejar_");
+                tmpFolder.toFile().deleteOnExit();
+                JarFile jar = new JarFile(inputPath.toFile());
+                Enumeration<JarEntry> entry = jar.entries();
+                while (entry.hasMoreElements()) {
+                    JarEntry e = entry.nextElement();
+                    if (e.getName().endsWith(".class") || true) {
+                        File f = new File(tmpFolder.toString(), e.getName());
+                        if (!f.exists()) {
+                            f.getParentFile().mkdirs();
+                            f = new File(tmpFolder.toString(), e.getName());
+                        }
+                        if (e.isDirectory()) {
+                            continue;
+                        }
+                        InputStream is = jar.getInputStream(e);
+                        FileOutputStream out = new FileOutputStream(f);
+                        while (is.available() > 0) {
+                            out.write(is.read());
+                        }
+                        is.close();
+                        out.close();
                     }
-                });
+                }
+                inputPath = tmpFolder;
+            }
+            int finalCnt = cnt;
+            Path finalInputPath = inputPath;
+            Files.walk(inputPath)
+                    .filter(Files::isRegularFile)
+                    .filter((classfile) -> classfile.toString().endsWith(".class"))
+                    .forEach((classfile) -> {
+                        final Path relPath = finalInputPath.relativize(classfile);
+                        final byte[] bytes;
+                        try {
+                            bytes = Files.readAllBytes(classfile);
+                            final ClassReader cr = new ClassReader(bytes);
+                            final boolean temp = options.doReduction;
+                            if (omittedClasses.contains(relPath.toString())) {
+                                options.doReduction = false;
+                            }
+                            final ClassAnalyzer cn = new ClassAnalyzer(hierarchy, options,null);
+                            // Ignore SourceFile, SourceDebugExtension, LocalVariableTable, LocalVariableTypeTable, LineNumberTable, MethodParameters
+                            // Don't need to skip stack map frame... ASM can adjust the offset automatically
+                            // unless adding jump instructions
+                            cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                            clsPool.put(relPath, cr);
+                            caPool.put(relPath, cn);
+                            outputCntPool.put(cr, finalCnt);
+                            options.doReduction = temp;
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    });
+            cnt += 1;
+        }
     }
 
     public void computeClasses(final SortedSet<Integer> closure) {
@@ -113,6 +205,7 @@ public class ClassPool {
         for (final Path key: clsPool.keySet()) {
             final ClassReader cr = clsPool.get(key);
             final ClassAnalyzer ca = caPool.get(key);
+            final Path outputPath = this.outputPath.get(outputCntPool.get(cr));
             final Path output = outputPath.resolve(key);
             try {
                 Files.createDirectories(output.getParent());
@@ -161,6 +254,7 @@ public class ClassPool {
 
     public void identityWriteClasses(final Hierarchy hierarchy) {
         clsPool.forEach((key, cr) -> {
+            final Path outputPath = this.outputPath.get(outputCntPool.get(cr));
             final Path output = outputPath.resolve(key);
             try {
                 Files.createDirectories(output.getParent());
